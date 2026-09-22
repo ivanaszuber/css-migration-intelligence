@@ -135,7 +135,12 @@ export class AppComponent {
     this.activeWorkspace = workspace;
     if (workspace === 'studio' && this.selectedModule === 'Shared app')
       this.selectedModule = 'Home & communications';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this.scrollToWorkspaceTop();
+  }
+
+  private scrollToWorkspaceTop(): void {
+    // Wait until Angular has rendered the destination before resetting the viewport.
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
   }
 
   setMigrationStep(step: 1 | 2 | 3 | 4 | 5): void {
@@ -547,6 +552,7 @@ export class AppComponent {
         this.buildConfigurableProperties();
         this.migrationStep = 5;
         this.activeWorkspace = 'inventory';
+        this.scrollToWorkspaceTop();
       },
       error: error => this.error = this.errorMessage(error, 'The migration bundle could not be generated.')
     });
