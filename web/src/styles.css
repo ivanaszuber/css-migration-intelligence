@@ -1,0 +1,12 @@
+/* File purpose: Defines page-wide reset, typography, colours, and body defaults shared by the Angular client. */
+:root {
+  color: #26332e;
+  background: #f8f8f5;
+  font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, textarea, input { font: inherit; }
+button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #aa513d; outline-offset: 2px; }

@@ -1,0 +1,18 @@
+<!-- File purpose: Configures the ASP.NET Core host and its Azure identity, Azure OpenAI, Core, and Service dependencies. -->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CssMigration.Intelligence.Service/CssMigration.Intelligence.Service.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.13.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CssMigration.Intelligence.Service.Tests" />
+  </ItemGroup>
+</Project>

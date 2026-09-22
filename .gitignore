@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+**/bin/
+**/obj/
+web/.angular/
+web/dist/
+web/node_modules/
+*.user
+*.suo
+.gstack/

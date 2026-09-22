@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "exportedAt": "2026-08-01T12:00:00Z",
+  "sources": [
+    { "tenantKey": "synthetic-north", "displayName": "Northstar Outfitters (demo)", "sourceId": "north-whole-app.css", "version": "31", "updatedAt": "2026-07-29T09:00:00Z", "cssPath": "tenants/north.css" },
+    { "tenantKey": "synthetic-harbour", "displayName": "Harbour & Hearth (demo)", "sourceId": "harbour-whole-app.css", "version": "24", "updatedAt": "2026-07-30T15:30:00Z", "cssPath": "tenants/harbour.css" },
+    { "tenantKey": "synthetic-field", "displayName": "Fieldwise Services (demo)", "sourceId": "field-whole-app.css", "version": "42", "updatedAt": "2026-07-31T08:15:00Z", "cssPath": "tenants/field.css" },
+    { "tenantKey": "synthetic-studio", "displayName": "Studio Lantern (demo)", "sourceId": "studio-whole-app.css", "version": "19", "updatedAt": "2026-07-31T13:45:00Z", "cssPath": "tenants/studio.css" },
+    { "tenantKey": "synthetic-campus", "displayName": "Campus Grove (demo)", "sourceId": "campus-whole-app.css", "version": "28", "updatedAt": "2026-08-01T08:00:00Z", "cssPath": "tenants/campus.css" }
+  ]
+}

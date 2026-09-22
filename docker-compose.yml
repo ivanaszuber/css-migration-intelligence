@@ -1,0 +1,15 @@
+# File purpose: Runs the API and the legacy standalone Nginx web image together for local container testing.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/CssMigration.Intelligence.Api/Dockerfile
+    ports:
+      - "5250:8080"
+  web:
+    build:
+      context: web
+    ports:
+      - "4500:80"
+    depends_on:
+      - api

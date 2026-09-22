@@ -1,0 +1,11 @@
+<!-- File purpose: Configures the .NET 8 orchestration library and its dependency on the deterministic Core project. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CssMigration.Intelligence.Core/CssMigration.Intelligence.Core.csproj" />
+  </ItemGroup>
+</Project>
