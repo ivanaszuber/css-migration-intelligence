@@ -23,13 +23,13 @@
           <div class="card-header"><div><p class="eyebrow">01 · Evidence intake</p><h2>Start with five fictional clients</h2><p>The demo button packages their complex CSS as a ZIP and runs it through the same importer as an uploaded archive.</p></div></div>
           <div class="intake-actions"><button type="button" (click)="runDemoZip()" [disabled]="loadingPortfolio">{{ loadingPortfolio ? 'Analysing demo ZIP…' : 'Run demo ZIP' }}</button><label class="upload-action" [class.disabled]="!uploadApproved">Upload ZIP<input type="file" accept=".zip,application/zip" (change)="uploadZip($event)" [disabled]="loadingPortfolio || !uploadApproved"></label></div>
           <label class="upload-confirmation"><input type="checkbox" [(ngModel)]="uploadApproved">I confirm this ZIP contains only synthetic CSS or data approved for this demo environment.</label>
-          <p class="privacy-note">Upload accepts UTF-8 CSS arranged as <code>tenant-name/file.css</code> (or <code>tenant-name.css</code>). Use synthetic or explicitly approved data only; this temporary public demo is not a company upload destination.</p>
+          <p class="privacy-note">Upload accepts UTF-8 CSS and LESS arranged as <code>tenant-name/file.less</code> or <code>tenant-name/file.css</code>. LESS is compiled safely with JavaScript disabled before analysis. Relative imports must point to another file inside the same tenant folder. Use synthetic or explicitly approved data only; this temporary public demo is not a company upload destination.</p>
         </section>
 
         <p class="inline-status" role="status" *ngIf="portfolioStatus"><span>✓</span>{{ portfolioStatus }}</p>
         <section class="work-card" *ngIf="zipMappings.length">
           <div class="card-header"><div><p class="eyebrow">Demo clients</p><h2>{{ zipMappings.length }} client portfolios identified</h2><p>Fictional companies with distinct styling and module-level customisations.</p></div></div>
-          <div class="table-wrap"><table><thead><tr><th>Client</th><th>CSS files</th><th>Size</th></tr></thead><tbody><tr *ngFor="let mapping of zipMappings"><td><strong>{{ mapping.displayName }}</strong></td><td>{{ mapping.files.join(', ') }}</td><td>{{ mapping.cssCharacters | number }} characters</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Client</th><th>Stylesheet files</th><th>Processing</th><th>Size</th></tr></thead><tbody><tr *ngFor="let mapping of zipMappings"><td><strong>{{ mapping.displayName }}</strong></td><td>{{ mapping.files.join(', ') }}</td><td>{{ mapping.inputFormat }}</td><td>{{ mapping.cssCharacters | number }} characters</td></tr></tbody></table></div>
         </section>
 
         <ng-container *ngIf="portfolio as result">
@@ -38,6 +38,23 @@
           <section class="work-card module-section">
             <div class="card-header"><div><p class="eyebrow">02 · Module view</p><h2>Where can configuration replace custom CSS?</h2><p>Candidate coverage is a rules-based estimate, not the percentage migrated. “Shared app” includes rules that cannot be safely assigned to one module.</p></div></div>
             <div class="module-grid"><article class="module-card" *ngFor="let module of result.modules"><div><span class="module-icon">◫</span><strong>{{ module.module }}</strong></div><div class="module-number">{{ module.candidatePercentage | number:'1.0-1' }}%<small>candidate coverage</small></div><div class="progress-track"><span [style.width.%]="module.candidatePercentage"></span></div><p>{{ module.candidateDeclarationCount }} of {{ module.totalDeclarationCount }} declarations · {{ module.tenantCount }} clients</p><small>{{ module.manualReviewCount }} declarations outside this proposal</small></article></div>
+          </section>
+
+          <section class="work-card equivalence-section">
+            <div class="card-header"><div><p class="eyebrow">Cross-client implementation intelligence</p><h2>Different CSS, same design decision?</h2><p>Canonical rules compare equivalent colours, box shorthands, zero units, property aliases and component roles. An isolated browser fixture then compares computed styles. Neither path changes source CSS.</p></div></div>
+            <div class="equivalence-summary"><div><strong>{{ result.equivalence.highConfidenceClusterCount }}</strong><span>high-confidence canonical matches</span></div><div><strong>{{ result.equivalence.reviewClusterCount }}</strong><span>layout matches needing review</span></div><div><strong>{{ renderedEvidence?.clusters?.length || 0 }}</strong><span>browser-computed matches</span></div></div>
+            <div class="confidence-legend"><span class="confidence-high">High · token proposal</span><span class="confidence-medium">Medium · browser + human review</span><span>Low · preserve as custom</span></div>
+            <p class="render-status" [class.is-running]="renderingEvidence"><span>{{ renderingEvidence ? '↻' : '✓' }}</span>{{ renderEvidenceStatus }}</p>
+            <div class="equivalence-grid" *ngIf="result.equivalence.clusters.length; else noEquivalenceClusters">
+              <details *ngFor="let cluster of result.equivalence.clusters | slice:0:12" [class.medium-confidence]="cluster.confidence !== 'high'">
+                <summary><span><strong>{{ cluster.component }}</strong><small>{{ cluster.canonicalProperty }}: {{ cluster.canonicalValue }}</small></span><em>{{ cluster.confidence }} confidence · {{ cluster.tenantKeys.length }} clients</em></summary>
+                <p>{{ cluster.rationale }}</p>
+                <div class="implementation-evidence" *ngFor="let implementation of cluster.implementations | slice:0:8"><strong>{{ implementation.tenantKey }}</strong><code>{{ implementation.selector }} {{ '{' }} {{ implementation.rawProperty }}: {{ implementation.rawValue }} {{ '}' }}</code></div>
+              </details>
+            </div>
+            <ng-template #noEquivalenceClusters><p class="empty-copy">No repeated equivalent implementations were proven in this portfolio. Unique rules remain in the normal review queue.</p></ng-template>
+            <details class="rendered-evidence" *ngIf="renderedEvidence?.clusters?.length"><summary>Inspect browser-computed matches ({{ renderedEvidence!.clusters.length }})</summary><div class="rendered-match-list"><article *ngFor="let cluster of renderedEvidence!.clusters | slice:0:30"><div><strong>{{ cluster.component }}</strong><span class="status-pill" [class.ready]="cluster.confidence === 'high'" [class.warning]="cluster.confidence !== 'high'">{{ cluster.confidence }}</span></div><code>{{ cluster.property }}: {{ cluster.computedValue }}</code><p>{{ cluster.tenantKeys.length }} clients · {{ cluster.decision }}</p></article></div></details>
+            <p class="privacy-note">{{ result.equivalence.methodBoundary }} {{ renderedEvidence?.evidenceBoundary || '' }}</p>
           </section>
 
           <section class="work-card recommendation-section">

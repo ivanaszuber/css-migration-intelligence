@@ -39,6 +39,30 @@ public sealed class CssZipImporterTests
     }
 
     [Fact]
+    public void Import_CompilesLessPerTenantBeforeAnalysis()
+    {
+        var compiler = new RecordingLessCompiler(".module-home__hero { color: #ffffff; } .module-home__hero:hover { color: #ffffff; } .module-home__hero:focus { color: #ffffff; }");
+        using var stream = Zip(
+            ("north/variables.less", "@brand: #fff;"),
+            ("north/home.less", "@import \"variables.less\"; .module-home { &__hero { color: @brand; } }"));
+
+        var result = new CssZipImporter(compiler).Import(stream);
+
+        Assert.Contains("Internal import variables.less", compiler.ReceivedSource);
+        Assert.Equal("zip-less-compiled", Assert.Single(result.Portfolio.Sources).Version);
+        Assert.Equal("LESS compiled to CSS", Assert.Single(result.Mappings).InputFormat);
+        Assert.Contains(result.Analysis.TokenPlan.Candidates, item => item.Name.Contains("module-home", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Import_RejectsExternalLessImports()
+    {
+        using var stream = Zip(("north/home.less", "@import \"https://example.test/theme.less\"; .card { color: red; }"));
+        var error = Assert.Throws<PortfolioValidationException>(() => new CssZipImporter(new RecordingLessCompiler("")).Import(stream));
+        Assert.Contains(error.Errors, item => item.Code == "less.import.external");
+    }
+
+    [Fact]
     public void Import_UsesSuppliedClientNameWithoutChangingTechnicalTenantKey()
     {
         using var stream = Zip(("synthetic-north/home.css", ".module-home { color: #123456; }"));
@@ -63,5 +87,16 @@ public sealed class CssZipImporterTests
         }
         stream.Position = 0;
         return stream;
+    }
+
+    private sealed class RecordingLessCompiler(string output) : ILessCompiler
+    {
+        public string ReceivedSource { get; private set; } = string.Empty;
+
+        public string Compile(string less, string sourceLabel)
+        {
+            ReceivedSource = less;
+            return output;
+        }
     }
 }

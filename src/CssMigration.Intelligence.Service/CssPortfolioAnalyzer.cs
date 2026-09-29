@@ -16,6 +16,7 @@ public sealed class CssPortfolioAnalyzer
     private readonly CssPortfolioValidator _validator = new();
     private readonly DesignTokenDiscovery _tokenDiscovery = new();
     private readonly CssModuleReporter _moduleReporter = new();
+    private readonly CssEquivalenceAnalyzer _equivalenceAnalyzer = new();
 
     public CssAnalysisResponse AnalyzeSingle(string? sourceId, string css)
     {
@@ -94,6 +95,7 @@ public sealed class CssPortfolioAnalyzer
             .ToArray();
 
         var tokenPlan = _tokenDiscovery.Discover(analyses.Select(item => (item.Source, item.Result.Inventory)).ToArray());
+        var equivalence = _equivalenceAnalyzer.Analyze(analyses.Select(item => (item.Source, item.Result.Inventory)).ToArray());
         return new(
             "1.0",
             "synthetic-or-explicitly-approved-input-only",
@@ -107,8 +109,12 @@ public sealed class CssPortfolioAnalyzer
             tenants,
             exceptions,
             failedChecks,
-            _moduleReporter.CandidateCoverage(input, tokenPlan));
+            _moduleReporter.CandidateCoverage(input, tokenPlan),
+            equivalence);
     }
+
+    public CssRenderedEvidenceReport CompareRendered(CssRenderedEvidenceRequest request)
+        => _equivalenceAnalyzer.CompareRendered(request);
 
     private static IReadOnlyList<CssCategoryCoverage> AggregateCoverage(IReadOnlyList<TenantAnalysis> analyses)
     {

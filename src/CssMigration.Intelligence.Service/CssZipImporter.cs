@@ -1,6 +1,7 @@
 // File purpose: Safely turns an approved ZIP of tenant CSS files into an in-memory portfolio.
 using System.IO.Compression;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CssMigration.Intelligence.Service;
 
@@ -9,22 +10,33 @@ public sealed record CssZipImportResponse(
     CssPortfolioAnalysisResponse Analysis,
     IReadOnlyList<CssZipTenantMapping> Mappings);
 
-public sealed record CssZipTenantMapping(string TenantKey, string DisplayName, IReadOnlyList<string> Files, int CssCharacters);
+public sealed record CssZipTenantMapping(
+    string TenantKey,
+    string DisplayName,
+    IReadOnlyList<string> Files,
+    int CssCharacters,
+    string InputFormat);
 
-public sealed class CssZipImporter
+public sealed partial class CssZipImporter
 {
     public const long MaximumArchiveBytes = 12_000_000;
     private const long MaximumExpandedBytes = 50_000_000;
     private const int MaximumEntries = 500;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly CssPortfolioAnalyzer _analyzer = new();
+    private readonly ILessCompiler _lessCompiler;
+
+    public CssZipImporter(ILessCompiler? lessCompiler = null)
+    {
+        _lessCompiler = lessCompiler ?? new NodeLessCompiler();
+    }
 
     public CssZipImportResponse Import(Stream stream, IReadOnlyDictionary<string, string>? displayNames = null)
     {
         try
         {
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            var files = new Dictionary<string, List<(string Path, string Css)>>(StringComparer.OrdinalIgnoreCase);
+            var files = new Dictionary<string, List<StylesheetFile>>(StringComparer.OrdinalIgnoreCase);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long expanded = 0;
             foreach (var entry in archive.Entries)
@@ -37,10 +49,11 @@ public sealed class CssZipImporter
                     throw Error("zip.path.invalid", $"Unsafe archive path: {path}");
                 var unixMode = (entry.ExternalAttributes >> 16) & 0xF000;
                 if (unixMode == 0xA000) throw Error("zip.symlink", $"Symbolic links are not accepted: {path}");
-                if (!path.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
-                    throw Error("zip.file.unsupported", $"Only CSS files are accepted: {path}");
-                if (!seen.Add(path)) throw Error("zip.file.duplicate", $"Duplicate CSS file: {path}");
-                if (seen.Count > MaximumEntries) throw Error("zip.too_many", "The archive contains too many CSS files.");
+                var isLess = path.EndsWith(".less", StringComparison.OrdinalIgnoreCase);
+                if (!isLess && !path.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
+                    throw Error("zip.file.unsupported", $"Only CSS and LESS files are accepted: {path}");
+                if (!seen.Add(path)) throw Error("zip.file.duplicate", $"Duplicate stylesheet: {path}");
+                if (seen.Count > MaximumEntries) throw Error("zip.too_many", "The archive contains too many stylesheets.");
                 expanded += entry.Length;
                 if (expanded > MaximumExpandedBytes || entry.Length > CssPortfolioValidator.MaximumCssLength)
                     throw Error("zip.too_large", "The archive or one stylesheet exceeds the demo size limit.");
@@ -49,28 +62,33 @@ public sealed class CssZipImporter
                 if (string.IsNullOrWhiteSpace(tenant) || tenant.Length > 100)
                     throw Error("zip.tenant.invalid", $"Cannot identify a tenant for {path}");
                 using var reader = new StreamReader(entry.Open(), StrictUtf8, detectEncodingFromByteOrderMarks: true);
-                var css = reader.ReadToEnd();
-                if (css.Length > CssPortfolioValidator.MaximumCssLength)
-                    throw Error("zip.css.too_large", $"CSS file is too large: {path}");
+                var stylesheet = reader.ReadToEnd();
+                if (stylesheet.Length > CssPortfolioValidator.MaximumCssLength)
+                    throw Error("zip.stylesheet.too_large", $"Stylesheet is too large: {path}");
                 if (!files.TryGetValue(tenant, out var group)) files[tenant] = group = [];
-                group.Add((path, css));
+                group.Add(new(path, stylesheet, isLess));
             }
-            if (files.Count == 0) throw Error("zip.empty", "The archive contains no CSS files.");
+            if (files.Count == 0) throw Error("zip.empty", "The archive contains no CSS or LESS files.");
             var now = DateTimeOffset.UtcNow;
             var sources = files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase).Select(item =>
             {
-                var css = string.Join("\n", item.Value.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
-                    .Select(file => $"/* Imported from {file.Path} */\n{file.Css}"));
+                var ordered = item.Value.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToArray();
+                var hasLess = ordered.Any(file => file.IsLess);
+                var source = string.Join("\n", ordered.Select(file =>
+                    $"/* Imported from {file.Path} */\n{RemoveInternalImports(file, ordered)}"));
+                var css = hasLess ? _lessCompiler.Compile(source, item.Key) : source;
                 if (css.Length > CssPortfolioValidator.MaximumCssLength)
                     throw Error("zip.tenant.too_large", $"Combined CSS for {item.Key} exceeds the demo limit.");
                 var displayName = displayNames is not null && displayNames.TryGetValue(item.Key, out var supplied)
                     ? supplied : FriendlyName(item.Key);
-                return new CssPortfolioSource(item.Key, displayName, $"{item.Key}-archive.css", "zip-import", now, css);
+                return new CssPortfolioSource(item.Key, displayName, $"{item.Key}-archive.css",
+                    hasLess ? "zip-less-compiled" : "zip-import", now, css);
             }).ToArray();
             var portfolio = new CssPortfolioInput("1.0", now, sources);
             var mappings = files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(item => new CssZipTenantMapping(item.Key, sources.Single(source => source.TenantKey == item.Key).DisplayName,
-                    item.Value.Select(file => file.Path).ToArray(), item.Value.Sum(file => file.Css.Length)))
+                    item.Value.Select(file => file.Path).ToArray(), item.Value.Sum(file => file.Content.Length),
+                    item.Value.Any(file => file.IsLess) ? "LESS compiled to CSS" : "CSS"))
                 .ToArray();
             return new CssZipImportResponse(portfolio, _analyzer.AnalyzePortfolio(portfolio), mappings);
         }
@@ -80,9 +98,28 @@ public sealed class CssZipImporter
         }
         catch (DecoderFallbackException)
         {
-            throw Error("zip.encoding", "CSS files must use UTF-8 encoding.");
+            throw Error("zip.encoding", "CSS and LESS files must use UTF-8 encoding.");
         }
     }
+
+    private static string RemoveInternalImports(StylesheetFile file, IReadOnlyList<StylesheetFile> tenantFiles)
+        => ImportRegex().Replace(file.Content, match =>
+        {
+            var importPath = match.Groups[1].Value.Replace('\\', '/');
+            if (importPath.StartsWith("http:", StringComparison.OrdinalIgnoreCase)
+                || importPath.StartsWith("https:", StringComparison.OrdinalIgnoreCase)
+                || importPath.StartsWith("//", StringComparison.Ordinal)
+                || importPath.StartsWith("/", StringComparison.Ordinal)
+                || importPath.Contains("url(", StringComparison.OrdinalIgnoreCase))
+                throw Error("less.import.external", $"External or absolute LESS imports are not accepted: {file.Path} -> {importPath}");
+
+            var directory = Path.GetDirectoryName(file.Path)?.Replace('\\', '/') ?? string.Empty;
+            var combined = Path.GetFullPath(Path.Combine("/", directory, importPath)).Replace('\\', '/').TrimStart('/');
+            var candidates = Path.HasExtension(combined) ? new[] { combined } : new[] { combined + ".less", combined + ".css" };
+            if (!candidates.Any(candidate => tenantFiles.Any(item => string.Equals(item.Path, candidate, StringComparison.OrdinalIgnoreCase))))
+                throw Error("less.import.missing", $"LESS import was not found inside the same tenant folder: {file.Path} -> {importPath}");
+            return $"/* Internal import {importPath} included from the tenant ZIP. */";
+        });
 
     private static PortfolioValidationException Error(string code, string message)
         => new([new PortfolioValidationError(code, message)]);
@@ -90,4 +127,9 @@ public sealed class CssZipImporter
     private static string FriendlyName(string tenantKey)
         => string.Join(" ", tenantKey.Replace('_', '-').Split('-', StringSplitOptions.RemoveEmptyEntries)
             .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
+
+    [GeneratedRegex("@import\\s*(?:\\([^)]*\\)\\s*)?[\\\"']([^\\\"']+)[\\\"']\\s*;", RegexOptions.IgnoreCase)]
+    private static partial Regex ImportRegex();
+
+    private sealed record StylesheetFile(string Path, string Content, bool IsLess);
 }

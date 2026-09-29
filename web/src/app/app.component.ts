@@ -6,6 +6,8 @@ import {
   AiRecommendationResponse,
   ApprovedTokenSelection,
   CssMigrationBundle,
+  CssPortfolioInput,
+  CssRenderedEvidenceReport,
   MigratedThemeProjectionResult,
   PortfolioAnalysis,
   SingleAnalysis,
@@ -59,6 +61,9 @@ export class AppComponent {
   themeSection: 'brand' | 'appearance' | 'components' = 'brand';
 
   portfolio?: PortfolioAnalysis;
+  renderedEvidence?: CssRenderedEvidenceReport;
+  renderingEvidence = false;
+  renderEvidenceStatus = '';
   aiRecommendations?: AiRecommendationResponse;
   approvalRows: TokenApprovalRow[] = [];
   migrationBundle?: CssMigrationBundle;
@@ -91,7 +96,7 @@ export class AppComponent {
   candidateFilter = 'all';
   candidateLimit = 30;
   configurableProperties: ConfigurableProperty[] = [];
-  private activePortfolioInput?: unknown;
+  private activePortfolioInput?: CssPortfolioInput;
   sourceId = 'operator-synthetic.css';
   css = `.app-header { color: #ffffff; background: #18231f; padding: 16px 20px; }
 .primary-button { color: #ffffff; background: #e24a32; border-radius: 9px; padding: 12px 18px; }
@@ -270,6 +275,7 @@ export class AppComponent {
     this.zipMappings = result.mappings;
     this.showPortfolio(result.analysis, source);
     this.prepareDeterministicContract();
+    this.collectRenderedEvidence();
   }
 
   prepareDeterministicContract(): void {
@@ -489,11 +495,12 @@ export class AppComponent {
     this.error = '';
     this.portfolioStatus = '';
     try {
-      const parsed: unknown = JSON.parse(this.portfolioJson);
+      const parsed: CssPortfolioInput = JSON.parse(this.portfolioJson);
       this.api.analyzePortfolio(parsed).pipe(finalize(() => this.loadingPortfolio = false)).subscribe({
         next: result => {
           this.activePortfolioInput = parsed;
           this.showPortfolio(result, 'Pasted JSON');
+          this.collectRenderedEvidence();
         },
         error: error => this.error = this.errorMessage(error, 'The JSON portfolio could not be analysed.')
       });
@@ -777,6 +784,8 @@ export class AppComponent {
     this.migrationBundle = undefined;
     this.selectedTenant = undefined;
     this.conflictResolutionDrafts = [];
+    this.renderedEvidence = undefined;
+    this.renderEvidenceStatus = this.activePortfolioInput ? 'Preparing isolated browser comparison…' : 'Browser comparison needs the source portfolio input.';
     this.portfolioStatus = `${source} analysed: ${result.tenantCount} clients. Mapping and coverage are ready for review.`;
     this.activeWorkspace = 'migration';
     this.migrationStep = 1;
@@ -785,6 +794,111 @@ export class AppComponent {
       results?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       results?.focus({ preventScroll: true });
     });
+  }
+
+  private collectRenderedEvidence(): void {
+    const input = this.activePortfolioInput;
+    const probes = this.portfolio?.equivalence.renderProbes ?? [];
+    if (!input || probes.length === 0) return;
+    this.renderingEvidence = true;
+    this.renderEvidenceStatus = 'Rendering the same synthetic component fixture for each client…';
+    this.captureRenderedMeasurements(input, probes).then(measurements => {
+      this.api.compareRenderedEvidence({ measurements }).pipe(finalize(() => this.renderingEvidence = false)).subscribe({
+        next: result => {
+          this.renderedEvidence = result;
+          this.renderEvidenceStatus = `${result.clusters.length} browser-computed matches found. Layout matches still require human review.`;
+        },
+        error: error => {
+          this.renderEvidenceStatus = 'Static equivalence is available; browser comparison could not be completed.';
+          this.error = this.errorMessage(error, 'Browser-computed evidence could not be compared.');
+        }
+      });
+    }).catch(() => {
+      this.renderingEvidence = false;
+      this.renderEvidenceStatus = 'Static equivalence is available; the isolated browser fixture could not be rendered.';
+    });
+  }
+
+  private async captureRenderedMeasurements(
+    input: CssPortfolioInput,
+    probes: PortfolioAnalysis['equivalence']['renderProbes']
+  ): Promise<Array<{
+    tenantKey: string;
+    probeId: string;
+    component: string;
+    computedStyles: Record<string, string>;
+    geometry: { x: number; y: number; width: number; height: number };
+  }>> {
+    const measurements: Array<{
+      tenantKey: string;
+      probeId: string;
+      component: string;
+      computedStyles: Record<string, string>;
+      geometry: { x: number; y: number; width: number; height: number };
+    }> = [];
+    for (const source of input.sources) {
+      const frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;left:-12000px;top:0;width:960px;height:720px;visibility:hidden;pointer-events:none';
+      document.body.appendChild(frame);
+      try {
+        const doc = frame.contentDocument;
+        if (!doc) continue;
+        doc.open();
+        doc.write('<!doctype html><html><head></head><body></body></html>');
+        doc.close();
+        const style = doc.createElement('style');
+        style.textContent = this.sanitizeCssForRender(source.css);
+        doc.head.appendChild(style);
+        doc.body.innerHTML = this.renderFixtureHtml();
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        for (const probe of probes) {
+          const element = doc.querySelector(probe.targetSelector) as HTMLElement | null;
+          if (!element) continue;
+          const computed = frame.contentWindow?.getComputedStyle(element);
+          if (!computed) continue;
+          const computedStyles = Object.fromEntries(probe.properties.map(property => [property, computed.getPropertyValue(property).trim()]));
+          const rect = element.getBoundingClientRect();
+          measurements.push({
+            tenantKey: source.tenantKey,
+            probeId: probe.id,
+            component: probe.component,
+            computedStyles,
+            geometry: {
+              x: Math.round(rect.x * 10) / 10,
+              y: Math.round(rect.y * 10) / 10,
+              width: Math.round(rect.width * 10) / 10,
+              height: Math.round(rect.height * 10) / 10
+            }
+          });
+        }
+      } finally {
+        frame.remove();
+      }
+    }
+    return measurements;
+  }
+
+  private sanitizeCssForRender(css: string): string {
+    return css
+      .replace(/@import[^;]+;/gi, '/* external import removed from render fixture */')
+      .replace(/@font-face\s*\{[^}]*\}/gi, '/* font face removed from render fixture */')
+      .replace(/url\([^)]*\)/gi, 'none')
+      .replace(/expression\([^)]*\)/gi, 'none')
+      .replace(/javascript\s*:/gi, 'blocked:');
+  }
+
+  private renderFixtureHtml(): string {
+    return `<div class="app-shell">
+      <header class="app-header topbar"><h1 class="page-heading app-header__title">Fixture heading</h1><button class="app-header__action action-button primary-button">Action</button></header>
+      <nav class="mobile-nav"><a class="mobile-nav__item">News</a><a class="mobile-nav__item is-active">Active</a></nav>
+      <main>
+        <article class="content-card feed-item"><h2 class="content-card__title feed-item__title">Card</h2><input class="form-field" value="Fixture"></article>
+        <section class="module-home home"><div class="module-home__hero home-banner hero">Home hero</div><article class="module-home__card home-card">Home card</article><button class="module-home__action primary-button">Home action</button></section>
+        <section class="module-learning learning academy"><div class="module-learning__hero learning-banner">Learning hero</div><article class="module-learning__card academy-card">Learning card</article><button class="module-learning__action primary-button">Learning action</button></section>
+        <section class="module-operations operations"><div class="module-operations__hero operations-banner">Operations hero</div><article class="module-operations__card task-card">Operations card</article><button class="module-operations__action primary-button">Operations action</button></section>
+      </main>
+    </div>`;
   }
 
   private errorMessage(error: { error?: { errors?: Array<{ message?: string }>; detail?: string; title?: string } }, fallback: string): string {

@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import {
   AiRecommendationResponse,
   CssMigrationBundle,
+  CssRenderedEvidenceReport,
   MigratedThemeProjectionResult,
   PortfolioAnalysis,
   SingleAnalysis,
@@ -28,6 +29,10 @@ export class CssIntelligenceApiService {
 
   analyzePortfolio(input: unknown): Observable<PortfolioAnalysis> {
     return this.http.post<PortfolioAnalysis>(`${this.apiBase}/api/portfolio/analyze`, input);
+  }
+
+  compareRenderedEvidence(input: unknown): Observable<CssRenderedEvidenceReport> {
+    return this.http.post<CssRenderedEvidenceReport>(`${this.apiBase}/api/portfolio/render-evidence`, input);
   }
 
   loadDemoZip(): Observable<ZipImportResult> {

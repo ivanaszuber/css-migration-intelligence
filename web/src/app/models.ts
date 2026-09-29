@@ -39,6 +39,68 @@ export interface PortfolioAnalysis {
   }>;
   failedChecks: Array<{ tenantKey: string; sourceId: string; code: string; message: string; line: number }>;
   modules: ModuleCoverage[];
+  equivalence: CssEquivalenceAnalysis;
+}
+
+export interface CssPortfolioInput {
+  schemaVersion: string;
+  exportedAt: string;
+  sources: Array<{
+    tenantKey: string;
+    displayName: string;
+    sourceId: string;
+    version: string;
+    updatedAt: string;
+    css: string;
+  }>;
+}
+
+export interface CssEquivalenceAnalysis {
+  canonicalDeclarationCount: number;
+  highConfidenceClusterCount: number;
+  reviewClusterCount: number;
+  clusters: Array<{
+    id: string;
+    component: string;
+    canonicalProperty: string;
+    canonicalValue: string;
+    confidence: 'high' | 'medium' | 'low';
+    decision: string;
+    rationale: string;
+    tenantKeys: string[];
+    implementations: Array<{
+      tenantKey: string;
+      selector: string;
+      rawProperty: string;
+      rawValue: string;
+      canonicalProperty: string;
+      canonicalValue: string;
+      line: number;
+    }>;
+  }>;
+  renderProbes: Array<{
+    id: string;
+    component: string;
+    targetSelector: string;
+    properties: string[];
+    sourceSelectors: string[];
+  }>;
+  methodBoundary: string;
+}
+
+export interface CssRenderedEvidenceReport {
+  comparedAt: string;
+  evidenceBoundary: string;
+  clusters: Array<{
+    probeId: string;
+    component: string;
+    property: string;
+    computedValue: string;
+    confidence: 'high' | 'medium' | 'low';
+    decision: string;
+    tenantKeys: string[];
+    rationale: string;
+  }>;
 }
 
 export interface ModuleCoverage {
@@ -51,9 +113,9 @@ export interface ModuleCoverage {
 }
 
 export interface ZipImportResult {
-  portfolio: unknown;
+  portfolio: CssPortfolioInput;
   analysis: PortfolioAnalysis;
-  mappings: Array<{ tenantKey: string; displayName: string; files: string[]; cssCharacters: number }>;
+  mappings: Array<{ tenantKey: string; displayName: string; files: string[]; cssCharacters: number; inputFormat: string }>;
 }
 
 export interface DesignTokenPlan {

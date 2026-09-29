@@ -11,10 +11,16 @@ WORKDIR /source
 COPY . .
 RUN dotnet publish src/CssMigration.Intelligence.Api/CssMigration.Intelligence.Api.csproj -c Release -o /app
 
+FROM node:20-bookworm-slim AS less-runtime
+RUN npm install --global --ignore-scripts less@4.9.1
+
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=api-build /app .
 COPY --from=web-build /web/dist/css-intelligence ./wwwroot
+COPY --from=less-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=less-runtime /usr/local/lib/node_modules/less /opt/less
+RUN ln -s /opt/less/bin/lessc /usr/local/bin/lessc
 COPY samples /samples
 ENV ASPNETCORE_URLS=http://+:8080
 ENV Portfolio__JsonPath=/samples/portfolio.manifest.json

@@ -70,7 +70,7 @@ app.MapPost("/api/portfolio/ai-recommendations", async (
     try
     {
         var analysis = analyzer.AnalyzePortfolio(input);
-        return Results.Ok(await aiProvider.RecommendAsync(analysis.TokenPlan, cancellationToken));
+        return Results.Ok(await aiProvider.RecommendAsync(analysis.TokenPlan, analysis.Equivalence, cancellationToken));
     }
     catch (PortfolioValidationException exception) { return Results.BadRequest(new { errors = exception.Errors }); }
     catch (JsonException exception) { return Results.Problem(title: "Azure AI returned an invalid recommendation response.", detail: exception.Message, statusCode: 502); }
@@ -88,7 +88,7 @@ app.MapGet("/api/portfolio/ai-recommendations", async (
     {
         var input = await provider.LoadAsync(cancellationToken);
         var analysis = analyzer.AnalyzePortfolio(input);
-        return Results.Ok(await aiProvider.RecommendAsync(analysis.TokenPlan, cancellationToken));
+        return Results.Ok(await aiProvider.RecommendAsync(analysis.TokenPlan, analysis.Equivalence, cancellationToken));
     }
     catch (PortfolioValidationException exception) { return Results.BadRequest(new { errors = exception.Errors }); }
     catch (JsonException exception) { return Results.Problem(title: "Azure AI returned an invalid recommendation response.", detail: exception.Message, statusCode: 502); }
@@ -100,6 +100,13 @@ app.MapPost("/api/portfolio/analyze", (CssPortfolioInput input, CssPortfolioAnal
 {
     try { return Results.Ok(analyzer.AnalyzePortfolio(input)); }
     catch (PortfolioValidationException exception) { return Results.BadRequest(new { errors = exception.Errors }); }
+});
+
+app.MapPost("/api/portfolio/render-evidence", (CssRenderedEvidenceRequest request, CssPortfolioAnalyzer analyzer) =>
+{
+    if (request.Measurements.Count > 2_000)
+        return Results.BadRequest(new { errors = new[] { new PortfolioValidationError("render.too_many", "Render evidence exceeds the 2,000 measurement limit.") } });
+    return Results.Ok(analyzer.CompareRendered(request));
 });
 
 app.MapPost("/api/portfolio/import-zip", (IFormFile file, CssZipImporter importer) =>

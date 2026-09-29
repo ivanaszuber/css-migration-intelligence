@@ -5,7 +5,10 @@ public interface IAiRecommendationProvider
 {
     string ProviderName { get; }
     bool IsConfigured { get; }
-    Task<AiRecommendationResponse> RecommendAsync(DesignTokenPlan plan, CancellationToken cancellationToken = default);
+    Task<AiRecommendationResponse> RecommendAsync(
+        DesignTokenPlan plan,
+        CssEquivalenceAnalysis? equivalence = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class DisabledAiRecommendationProvider : IAiRecommendationProvider
@@ -13,7 +16,10 @@ public sealed class DisabledAiRecommendationProvider : IAiRecommendationProvider
     public string ProviderName => "deterministic";
     public bool IsConfigured => false;
 
-    public Task<AiRecommendationResponse> RecommendAsync(DesignTokenPlan plan, CancellationToken cancellationToken = default)
+    public Task<AiRecommendationResponse> RecommendAsync(
+        DesignTokenPlan plan,
+        CssEquivalenceAnalysis? equivalence = null,
+        CancellationToken cancellationToken = default)
     {
         var selected = plan.Candidates.Where(candidate => candidate.SelectedForTarget).ToArray();
         var tokens = selected.Select(candidate => new AiProposedToken(

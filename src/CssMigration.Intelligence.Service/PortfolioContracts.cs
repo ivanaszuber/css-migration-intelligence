@@ -35,7 +35,70 @@ public sealed record CssPortfolioAnalysisResponse(
     IReadOnlyList<MigrationTenantSummary> Tenants,
     IReadOnlyList<MigrationExceptionItem> Exceptions,
     IReadOnlyList<MigrationFailedCheck> FailedChecks,
-    IReadOnlyList<ModuleMigrationCoverage> Modules);
+    IReadOnlyList<ModuleMigrationCoverage> Modules,
+    CssEquivalenceAnalysis Equivalence);
+
+public sealed record CssEquivalenceAnalysis(
+    int CanonicalDeclarationCount,
+    int HighConfidenceClusterCount,
+    int ReviewClusterCount,
+    IReadOnlyList<CssEquivalenceCluster> Clusters,
+    IReadOnlyList<CssRenderProbe> RenderProbes,
+    string MethodBoundary);
+
+public sealed record CssEquivalenceCluster(
+    string Id,
+    string Component,
+    string CanonicalProperty,
+    string CanonicalValue,
+    string Confidence,
+    string Decision,
+    string Rationale,
+    IReadOnlyList<string> TenantKeys,
+    IReadOnlyList<CssImplementationEvidence> Implementations);
+
+public sealed record CssImplementationEvidence(
+    string TenantKey,
+    string Selector,
+    string RawProperty,
+    string RawValue,
+    string CanonicalProperty,
+    string CanonicalValue,
+    int Line);
+
+public sealed record CssRenderProbe(
+    string Id,
+    string Component,
+    string TargetSelector,
+    IReadOnlyList<string> Properties,
+    IReadOnlyList<string> SourceSelectors);
+
+public sealed record CssRenderedEvidenceRequest(
+    IReadOnlyList<CssRenderedTenantProbe> Measurements);
+
+public sealed record CssRenderedTenantProbe(
+    string TenantKey,
+    string ProbeId,
+    string Component,
+    IReadOnlyDictionary<string, string> ComputedStyles,
+    CssRenderedGeometry Geometry);
+
+public sealed record CssRenderedGeometry(decimal X, decimal Y, decimal Width, decimal Height);
+
+public sealed record CssRenderedEvidenceReport(
+    DateTimeOffset ComparedAt,
+    string EvidenceBoundary,
+    IReadOnlyList<CssRenderedEquivalenceCluster> Clusters);
+
+public sealed record CssRenderedEquivalenceCluster(
+    string ProbeId,
+    string Component,
+    string Property,
+    string ComputedValue,
+    string Confidence,
+    string Decision,
+    IReadOnlyList<string> TenantKeys,
+    string Rationale);
 
 public sealed record ModuleMigrationCoverage(
     string Module,
