@@ -544,3 +544,26 @@ td small { display: block; margin-top: .2rem; }
   .footer-actions button { width: 100%; }
   .resolution-history article, .split-value { grid-template-columns: 1fr; }
 }
+.partial-import-card {
+  border-color: #e2b86b;
+  background: #fffdf7;
+}
+
+.failed-tenant-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.failed-tenant-list article {
+  padding: 14px 16px;
+  border: 1px solid #eadcc2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.failed-tenant-list small,
+.failed-tenant-list p {
+  display: block;
+  margin: 5px 0 0;
+}

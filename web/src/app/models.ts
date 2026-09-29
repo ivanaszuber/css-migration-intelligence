@@ -115,7 +115,20 @@ export interface ModuleCoverage {
 export interface ZipImportResult {
   portfolio: CssPortfolioInput;
   analysis: PortfolioAnalysis;
-  mappings: Array<{ tenantKey: string; displayName: string; files: string[]; cssCharacters: number; inputFormat: string }>;
+  mappings: Array<{
+    tenantKey: string;
+    displayName: string;
+    files: string[];
+    cssCharacters: number;
+    inputFormat: string;
+    compatibilityRepairs: string[];
+  }>;
+  failures: Array<{
+    tenantKey: string;
+    displayName: string;
+    files: string[];
+    errors: Array<{ code: string; message: string }>;
+  }>;
 }
 
 export interface DesignTokenPlan {

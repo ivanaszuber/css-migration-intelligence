@@ -27,9 +27,18 @@
         </section>
 
         <p class="inline-status" role="status" *ngIf="portfolioStatus"><span>✓</span>{{ portfolioStatus }}</p>
+        <section class="work-card partial-import-card" *ngIf="pendingZipResult">
+          <div class="card-header"><div><p class="eyebrow">Compilation review</p><h2>Continue with valid clients?</h2><p>The valid clients can be analysed now. Failed clients will remain clearly excluded; no CSS is silently discarded.</p></div></div>
+          <div class="failed-tenant-list"><article *ngFor="let failure of zipFailures"><strong>{{ failure.displayName }}</strong><small>{{ failure.files.join(', ') }}</small><p *ngFor="let item of failure.errors"><code>{{ item.code }}</code> {{ item.message }}</p></article></div>
+          <div class="intake-actions"><button type="button" (click)="continueWithValidTenants()">Continue with {{ zipMappings.length }} valid clients</button><button type="button" class="quiet" (click)="cancelPartialImport()">Cancel this import</button></div>
+        </section>
+        <section class="work-card partial-import-card" *ngIf="zipFailures.length && !pendingZipResult && portfolio">
+          <div class="card-header"><div><p class="eyebrow">Excluded from this analysis</p><h2>{{ zipFailures.length }} clients need LESS repair</h2><p>These clients were not included in any percentage or recommendation below.</p></div></div>
+          <div class="failed-tenant-list"><article *ngFor="let failure of zipFailures"><strong>{{ failure.displayName }}</strong><small>{{ failure.files.join(', ') }}</small><p *ngFor="let item of failure.errors"><code>{{ item.code }}</code> {{ item.message }}</p></article></div>
+        </section>
         <section class="work-card" *ngIf="zipMappings.length">
           <div class="card-header"><div><p class="eyebrow">Demo clients</p><h2>{{ zipMappings.length }} client portfolios identified</h2><p>Fictional companies with distinct styling and module-level customisations.</p></div></div>
-          <div class="table-wrap"><table><thead><tr><th>Client</th><th>Stylesheet files</th><th>Processing</th><th>Size</th></tr></thead><tbody><tr *ngFor="let mapping of zipMappings"><td><strong>{{ mapping.displayName }}</strong></td><td>{{ mapping.files.join(', ') }}</td><td>{{ mapping.inputFormat }}</td><td>{{ mapping.cssCharacters | number }} characters</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Client</th><th>Stylesheet files</th><th>Processing</th><th>Size</th></tr></thead><tbody><tr *ngFor="let mapping of zipMappings"><td><strong>{{ mapping.displayName }}</strong></td><td>{{ mapping.files.join(', ') }}</td><td>{{ mapping.inputFormat }}<small *ngFor="let repair of mapping.compatibilityRepairs">Compatibility repair: {{ repair }}</small></td><td>{{ mapping.cssCharacters | number }} characters</td></tr></tbody></table></div>
         </section>
 
         <ng-container *ngIf="portfolio as result">

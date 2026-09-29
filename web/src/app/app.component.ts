@@ -85,6 +85,9 @@ export class AppComponent {
   error = '';
   portfolioStatus = '';
   zipMappings: ZipImportResult['mappings'] = [];
+  zipFailures: ZipImportResult['failures'] = [];
+  pendingZipResult?: ZipImportResult;
+  pendingZipSource = '';
   uploadApproved = false;
   selectedModule = 'Home & communications';
   reviewTenantKey = 'all';
@@ -245,7 +248,7 @@ export class AppComponent {
     this.loadingPortfolio = true;
     this.error = '';
     this.api.loadDemoZip().pipe(finalize(() => this.loadingPortfolio = false)).subscribe({
-      next: result => this.acceptZip(result, 'Synthetic demo ZIP'),
+      next: result => this.reviewZipResult(result, 'Synthetic demo ZIP'),
       error: error => this.error = this.errorMessage(error, 'The synthetic demo ZIP could not be loaded.')
     });
   }
@@ -265,15 +268,47 @@ export class AppComponent {
       this.loadingPortfolio = false;
       input.value = '';
     })).subscribe({
-      next: result => this.acceptZip(result, file.name),
+      next: result => this.reviewZipResult(result, file.name),
       error: error => this.error = this.errorMessage(error, 'The ZIP could not be analysed.')
     });
+  }
+
+  private reviewZipResult(result: ZipImportResult, source: string): void {
+    if (!result.failures.length) {
+      this.acceptZip(result, source);
+      return;
+    }
+    this.pendingZipResult = result;
+    this.pendingZipSource = source;
+    this.zipMappings = result.mappings;
+    this.zipFailures = result.failures;
+    this.portfolioStatus = `${result.mappings.length} clients are ready. ${result.failures.length} could not be compiled and need review.`;
+  }
+
+  continueWithValidTenants(): void {
+    if (!this.pendingZipResult) return;
+    const result = this.pendingZipResult;
+    const source = this.pendingZipSource;
+    this.pendingZipResult = undefined;
+    this.pendingZipSource = '';
+    this.acceptZip(result, source);
+  }
+
+  cancelPartialImport(): void {
+    this.pendingZipResult = undefined;
+    this.pendingZipSource = '';
+    this.zipMappings = [];
+    this.zipFailures = [];
+    this.portfolioStatus = '';
   }
 
   private acceptZip(result: ZipImportResult, source: string): void {
     this.activePortfolioInput = result.portfolio;
     this.zipMappings = result.mappings;
+    this.zipFailures = result.failures;
     this.showPortfolio(result.analysis, source);
+    if (result.failures.length)
+      this.portfolioStatus = `${source} analysed with ${result.mappings.length} valid clients; ${result.failures.length} failed clients remain excluded and visible for repair.`;
     this.prepareDeterministicContract();
     this.collectRenderedEvidence();
   }

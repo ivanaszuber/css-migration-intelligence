@@ -8,14 +8,22 @@ namespace CssMigration.Intelligence.Service;
 public sealed record CssZipImportResponse(
     CssPortfolioInput Portfolio,
     CssPortfolioAnalysisResponse Analysis,
-    IReadOnlyList<CssZipTenantMapping> Mappings);
+    IReadOnlyList<CssZipTenantMapping> Mappings,
+    IReadOnlyList<CssZipTenantFailure> Failures);
 
 public sealed record CssZipTenantMapping(
     string TenantKey,
     string DisplayName,
     IReadOnlyList<string> Files,
     int CssCharacters,
-    string InputFormat);
+    string InputFormat,
+    IReadOnlyList<string> CompatibilityRepairs);
+
+public sealed record CssZipTenantFailure(
+    string TenantKey,
+    string DisplayName,
+    IReadOnlyList<string> Files,
+    IReadOnlyList<PortfolioValidationError> Errors);
 
 public sealed partial class CssZipImporter
 {
@@ -70,27 +78,40 @@ public sealed partial class CssZipImporter
             }
             if (files.Count == 0) throw Error("zip.empty", "The archive contains no CSS or LESS files.");
             var now = DateTimeOffset.UtcNow;
-            var sources = files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase).Select(item =>
+            var sources = new List<CssPortfolioSource>();
+            var mappings = new List<CssZipTenantMapping>();
+            var failures = new List<CssZipTenantFailure>();
+            foreach (var item in files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
             {
                 var ordered = item.Value.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToArray();
                 var hasLess = ordered.Any(file => file.IsLess);
-                var source = string.Join("\n", ordered.Select(file =>
-                    $"/* Imported from {file.Path} */\n{RemoveInternalImports(file, ordered)}"));
-                var css = hasLess ? _lessCompiler.Compile(source, item.Key) : source;
-                if (css.Length > CssPortfolioValidator.MaximumCssLength)
-                    throw Error("zip.tenant.too_large", $"Combined CSS for {item.Key} exceeds the demo limit.");
                 var displayName = displayNames is not null && displayNames.TryGetValue(item.Key, out var supplied)
                     ? supplied : FriendlyName(item.Key);
-                return new CssPortfolioSource(item.Key, displayName, $"{item.Key}-archive.css",
-                    hasLess ? "zip-less-compiled" : "zip-import", now, css);
-            }).ToArray();
+                try
+                {
+                    var source = string.Join("\n", ordered.Select(file =>
+                        $"/* Imported from {file.Path} */\n{RemoveInternalImports(file, ordered)}"));
+                    var repairs = new List<string>();
+                    if (hasLess) source = NormalizeLegacyLess(source, repairs);
+                    var css = hasLess ? _lessCompiler.Compile(source, item.Key) : source;
+                    if (css.Length > CssPortfolioValidator.MaximumCssLength)
+                        throw Error("zip.tenant.too_large", $"Combined CSS for {item.Key} exceeds the demo limit.");
+                    sources.Add(new CssPortfolioSource(item.Key, displayName, $"{item.Key}-archive.css",
+                        hasLess ? "zip-less-compiled" : "zip-import", now, css));
+                    mappings.Add(new CssZipTenantMapping(item.Key, displayName,
+                        ordered.Select(file => file.Path).ToArray(), ordered.Sum(file => file.Content.Length),
+                        hasLess ? "LESS compiled to CSS" : "CSS", repairs));
+                }
+                catch (PortfolioValidationException exception)
+                {
+                    failures.Add(new CssZipTenantFailure(item.Key, displayName,
+                        ordered.Select(file => file.Path).ToArray(), exception.Errors));
+                }
+            }
+            if (sources.Count == 0)
+                throw new PortfolioValidationException(failures.SelectMany(failure => failure.Errors).ToArray());
             var portfolio = new CssPortfolioInput("1.0", now, sources);
-            var mappings = files.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(item => new CssZipTenantMapping(item.Key, sources.Single(source => source.TenantKey == item.Key).DisplayName,
-                    item.Value.Select(file => file.Path).ToArray(), item.Value.Sum(file => file.Content.Length),
-                    item.Value.Any(file => file.IsLess) ? "LESS compiled to CSS" : "CSS"))
-                .ToArray();
-            return new CssZipImportResponse(portfolio, _analyzer.AnalyzePortfolio(portfolio), mappings);
+            return new CssZipImportResponse(portfolio, _analyzer.AnalyzePortfolio(portfolio), mappings, failures);
         }
         catch (InvalidDataException)
         {
@@ -128,8 +149,22 @@ public sealed partial class CssZipImporter
         => string.Join(" ", tenantKey.Replace('_', '-').Split('-', StringSplitOptions.RemoveEmptyEntries)
             .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
 
+    private static string NormalizeLegacyLess(string source, ICollection<string> repairs)
+    {
+        var repaired = DropShadowSpacingRegex().Replace(source, match =>
+        {
+            if (!repairs.Contains("Removed whitespace between drop-shadow and its opening parenthesis."))
+                repairs.Add("Removed whitespace between drop-shadow and its opening parenthesis.");
+            return "drop-shadow(";
+        });
+        return repaired;
+    }
+
     [GeneratedRegex("@import\\s*(?:\\([^)]*\\)\\s*)?[\\\"']([^\\\"']+)[\\\"']\\s*;", RegexOptions.IgnoreCase)]
     private static partial Regex ImportRegex();
+
+    [GeneratedRegex(@"\bdrop-shadow\s+\(", RegexOptions.IgnoreCase)]
+    private static partial Regex DropShadowSpacingRegex();
 
     private sealed record StylesheetFile(string Path, string Content, bool IsLess);
 }

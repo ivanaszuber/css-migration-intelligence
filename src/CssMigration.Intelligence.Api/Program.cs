@@ -112,7 +112,7 @@ app.MapPost("/api/portfolio/render-evidence", (CssRenderedEvidenceRequest reques
 app.MapPost("/api/portfolio/import-zip", (IFormFile file, CssZipImporter importer) =>
 {
     if (file.Length == 0 || file.Length > CssZipImporter.MaximumArchiveBytes)
-        return Results.BadRequest(new { errors = new[] { new PortfolioValidationError("zip.size", "Choose a ZIP archive under 12 MB.") } });
+        return Results.BadRequest(new { errors = new[] { new PortfolioValidationError("zip.size", "Choose a ZIP archive under 50 MB.") } });
     try
     {
         using var stream = file.OpenReadStream();

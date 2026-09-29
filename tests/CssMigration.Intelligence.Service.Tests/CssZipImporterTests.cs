@@ -97,6 +97,34 @@ public sealed class CssZipImporterTests
         Assert.DoesNotContain("DEPRECATED WARNING", result);
     }
 
+    [Fact]
+    public void Import_RepairsLegacyDropShadowFunctionSpacing()
+    {
+        var compiler = new RecordingLessCompiler(".tile { filter: drop-shadow(0 2px 4px #0003); }");
+        using var stream = Zip(("convini/theme.less", ".tile { filter: drop-shadow (0 2px 4px rgba(0,0,0,.2)); }"));
+
+        var result = new CssZipImporter(compiler).Import(stream);
+
+        Assert.Contains("drop-shadow(0 2px", compiler.ReceivedSource);
+        Assert.DoesNotContain("drop-shadow (", compiler.ReceivedSource);
+        Assert.Single(Assert.Single(result.Mappings).CompatibilityRepairs);
+    }
+
+    [Fact]
+    public void Import_ReturnsValidTenantsAndReportsTenantCompilationFailures()
+    {
+        using var stream = Zip(
+            ("valid/theme.less", ".card { color: red; }"),
+            ("broken/theme.less", ".card { color: @missing; }"));
+        var compiler = new SelectiveLessCompiler();
+
+        var result = new CssZipImporter(compiler).Import(stream);
+
+        Assert.Equal("valid", Assert.Single(result.Portfolio.Sources).TenantKey);
+        Assert.Equal("broken", Assert.Single(result.Failures).TenantKey);
+        Assert.Contains(Assert.Single(result.Failures).Errors, error => error.Code == "less.compile.failed");
+    }
+
     private static MemoryStream Zip(params (string Path, string Css)[] files)
     {
         var stream = new MemoryStream();
@@ -120,6 +148,16 @@ public sealed class CssZipImporterTests
         {
             ReceivedSource = less;
             return output;
+        }
+    }
+
+    private sealed class SelectiveLessCompiler : ILessCompiler
+    {
+        public string Compile(string less, string sourceLabel)
+        {
+            if (sourceLabel == "broken")
+                throw new PortfolioValidationException([new("less.compile.failed", "Synthetic compilation failure.")]);
+            return ".card { color: red; }";
         }
     }
 }
