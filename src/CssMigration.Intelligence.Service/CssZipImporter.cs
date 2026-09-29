@@ -19,9 +19,9 @@ public sealed record CssZipTenantMapping(
 
 public sealed partial class CssZipImporter
 {
-    public const long MaximumArchiveBytes = 12_000_000;
-    private const long MaximumExpandedBytes = 50_000_000;
-    private const int MaximumEntries = 500;
+    public const long MaximumArchiveBytes = 50_000_000;
+    private const long MaximumExpandedBytes = 200_000_000;
+    private const int MaximumEntries = 2_000;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly CssPortfolioAnalyzer _analyzer = new();
     private readonly ILessCompiler _lessCompiler;
@@ -56,7 +56,7 @@ public sealed partial class CssZipImporter
                 if (seen.Count > MaximumEntries) throw Error("zip.too_many", "The archive contains too many stylesheets.");
                 expanded += entry.Length;
                 if (expanded > MaximumExpandedBytes || entry.Length > CssPortfolioValidator.MaximumCssLength)
-                    throw Error("zip.too_large", "The archive or one stylesheet exceeds the demo size limit.");
+                    throw Error("zip.too_large", "The archive exceeds the 200 MB expanded limit or one stylesheet exceeds the 5 million character limit.");
                 var parts = path.Split('/');
                 var tenant = parts.Length == 1 ? Path.GetFileNameWithoutExtension(parts[0]) : parts[0];
                 if (string.IsNullOrWhiteSpace(tenant) || tenant.Length > 100)

@@ -4,7 +4,7 @@ namespace CssMigration.Intelligence.Service;
 public sealed class CssPortfolioValidator
 {
     public const int MaximumSourceCount = 500;
-    public const int MaximumCssLength = 250_000;
+    public const int MaximumCssLength = 5_000_000;
 
     public void Validate(CssPortfolioInput input)
     {

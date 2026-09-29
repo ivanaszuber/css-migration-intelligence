@@ -74,6 +74,18 @@ public sealed class CssZipImporterTests
         Assert.Equal("Northstar Outfitters (demo)", Assert.Single(result.Analysis.Tenants).DisplayName);
     }
 
+    [Fact]
+    public void Import_AcceptsStylesheetsAboveTheFormerDemoLimit()
+    {
+        var css = $"/* {new string('x', 300_000)} */ .module-home__hero {{ color: #123456; }}";
+        using var stream = Zip(("north/home.css", css));
+
+        var result = new CssZipImporter().Import(stream);
+
+        Assert.Equal(1, result.Analysis.TenantCount);
+        Assert.True(Assert.Single(result.Mappings).CssCharacters > 250_000);
+    }
+
     private static MemoryStream Zip(params (string Path, string Css)[] files)
     {
         var stream = new MemoryStream();

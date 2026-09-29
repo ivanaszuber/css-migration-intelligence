@@ -6,7 +6,7 @@ using CssMigration.Intelligence.Api;
 using CssMigration.Intelligence.Service;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 13_000_000);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 55_000_000);
 builder.Services.AddSingleton<CssPortfolioAnalyzer>();
 builder.Services.AddSingleton<CssMigrationCompiler>();
 builder.Services.AddSingleton<TenantThemeCompiler>();
