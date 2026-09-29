@@ -8,4 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="../CssMigration.Intelligence.Core/CssMigration.Intelligence.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CssMigration.Intelligence.Service.Tests" />
+  </ItemGroup>
 </Project>

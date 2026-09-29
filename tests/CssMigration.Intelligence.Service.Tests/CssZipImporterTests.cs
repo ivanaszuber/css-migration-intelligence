@@ -86,6 +86,17 @@ public sealed class CssZipImporterTests
         Assert.True(Assert.Single(result.Mappings).CssCharacters > 250_000);
     }
 
+    [Fact]
+    public void LessCompilerError_PrefersFatalDiagnosticAfterDeprecationWarnings()
+    {
+        const string stderr = "DEPRECATED WARNING: legacy media syntax\n109 @media @mobile {\nSyntaxError: expected ')' in - on line 212, column 4";
+
+        var result = NodeLessCompiler.RelevantCompilerError(stderr);
+
+        Assert.StartsWith("SyntaxError:", result);
+        Assert.DoesNotContain("DEPRECATED WARNING", result);
+    }
+
     private static MemoryStream Zip(params (string Path, string Css)[] files)
     {
         var stream = new MemoryStream();
